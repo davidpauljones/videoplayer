@@ -70,6 +70,7 @@
             transition: background-color 0.2s ease-in-out;
             z-index: 10; /* Ensure it's above the iframe */
         }
+        /* Removed .fullscreen-button styles as the button is being removed */
         .close-button:hover {
             background-color: #4b5563; /* gray-600 */
         }
@@ -119,6 +120,7 @@
             <button id="close-overlay-button" class="close-button" aria-label="Close video player">
                 &times;
             </button>
+            <!-- Fullscreen button removed -->
             <div class="video-player-container">
                 <iframe
                     id="dailymotion-iframe"
@@ -141,6 +143,7 @@
         const videoOverlay = document.getElementById('video-overlay');
         const dailymotionIframe = document.getElementById('dailymotion-iframe');
         const closeOverlayButton = document.getElementById('close-overlay-button');
+        // Removed fullscreenButton reference: const fullscreenButton = document.getElementById('fullscreen-button');
         const videoOverlayContent = document.getElementById('video-overlay-content');
 
         let hasSearched = false; // Flag to track if a search has been performed
@@ -155,7 +158,8 @@
             videosContainer.innerHTML = ''; // Clear previous videos
             hasSearched = true; // Indicate that a search has been initiated
 
-            const apiUrl = `https://api.dailymotion.com/videos?limit=25&longer_than=40&search=${encodeURIComponent(query)}`;
+            // Changed limit=25 to limit=100
+            const apiUrl = `https://api.dailymotion.com/videos?limit=100&longer_than=40&search=${encodeURIComponent(query)}`;
 
             try {
                 const response = await fetch(apiUrl);
@@ -216,9 +220,7 @@
                         <h3 class="text-lg font-semibold text-blue-300 group-hover:text-blue-200 mb-1">
                             ${video.title || 'Untitled Video'}
                         </h3>
-                        <p class="text-sm text-gray-400">
-                            Duration: ${video.duration ? `${Math.floor(video.duration / 60)}m ${video.duration % 60}s` : 'N/A'}
-                        </p>
+                        <!-- Removed duration display -->
                     </div>
                 `;
                 videosContainer.appendChild(videoCard);
@@ -227,7 +229,8 @@
 
         // Function to open the video overlay
         function openVideoOverlay(videoId) {
-            dailymotionIframe.src = `https://www.dailymotion.com/embed/video/${videoId}`;
+            // Updated embed link format
+            dailymotionIframe.src = `https://geo.dailymotion.com/player.html?video=${videoId}`;
             videoOverlay.classList.remove('hidden');
         }
 
@@ -236,6 +239,19 @@
             dailymotionIframe.src = ''; // Stop video playback
             videoOverlay.classList.add('hidden');
         }
+
+        // Removed fullscreen function:
+        // function requestFullscreen() {
+        //     if (dailymotionIframe.requestFullscreen) {
+        //         dailymotionIframe.requestFullscreen();
+        //     } else if (dailymotionIframe.mozRequestFullScreen) { /* Firefox */
+        //         dailymotionIframe.mozRequestFullScreen();
+        //     } else if (dailymotionIframe.webkitRequestFullscreen) { /* Chrome, Safari and Opera */
+        //         dailymotionIframe.webkitRequestFullscreen();
+        //     } else if (dailymotionIframe.msRequestFullscreen) { /* IE/Edge */
+        //         dailymotionIframe.msRequestFullscreen();
+        //     }
+        // }
 
         // Event Listeners
         searchForm.addEventListener('submit', (event) => {
@@ -253,6 +269,7 @@
         });
 
         closeOverlayButton.addEventListener('click', closeVideoOverlay);
+        // Removed fullscreen button event listener: fullscreenButton.addEventListener('click', requestFullscreen);
 
         // Close overlay when clicking outside the video content
         videoOverlay.addEventListener('click', (event) => {
