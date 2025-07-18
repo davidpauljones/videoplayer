@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dailymotion Video Search</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Import Inter font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+        }
+        /* Custom styles for the video overlay to ensure it covers the screen */
+        .video-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            padding: 1rem; /* Add some padding for smaller screens */
+        }
+        .video-overlay-content {
+            position: relative;
+            background-color: #1f2937; /* gray-800 */
+            border-radius: 0.75rem; /* rounded-xl */
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); /* shadow-2xl */
+            overflow: hidden;
+            width: 100%;
+            max-width: 64rem; /* max-w-4xl (approx) */
+        }
+        .video-player-container {
+            position: relative;
+            padding-bottom: 56.25%; /* 16:9 aspect ratio (height / width * 100%) */
+            height: 0;
+            overflow: hidden; /* Ensure iframe doesn't overflow */
+        }
+        .video-player-container iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-bottom-left-radius: 0.75rem; /* rounded-b-xl */
+            border-bottom-right-radius: 0.75rem; /* rounded-b-xl */
+        }
+        .close-button {
+            position: absolute;
+            top: 0.75rem; /* top-3 */
+            right: 0.75rem; /* right-3 */
+            color: white;
+            font-size: 1.875rem; /* text-3xl */
+            font-weight: bold;
+            background-color: #374151; /* gray-700 */
+            border-radius: 9999px; /* rounded-full */
+            width: 2.5rem; /* w-10 */
+            height: 2.5rem; /* h-10 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out;
+            z-index: 10; /* Ensure it's above the iframe */
+        }
+        .close-button:hover {
+            background-color: #4b5563; /* gray-600 */
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-900 text-gray-100 flex flex-col items-center p-4 sm:p-6">
+
+    <!-- Header Section -->
+    <header class="w-full max-w-4xl text-center mb-8">
+        <h1 class="text-4xl sm:text-5xl font-extrabold text-blue-400 mb-2">
+            Dailymotion Video Search
+        </h1>
+        <p class="text-lg sm:text-xl text-gray-300">
+            Find videos by searching the Dailymotion API.
+        </p>
+    </header>
+
+    <!-- Search Form -->
+    <form id="search-form" class="w-full max-w-2xl bg-gray-800 p-6 rounded-xl shadow-lg flex flex-col sm:flex-row items-center space-y-4 sm:space-y-0 sm:space-x-4 mb-8">
+        <input
+            type="text"
+            id="search-input"
+            placeholder="Search for videos..."
+            class="flex-grow p-3 rounded-lg bg-gray-700 text-gray-100 placeholder-gray-400 border border-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200 w-full"
+        />
+        <button
+            type="submit"
+            id="search-button"
+            class="px-6 py-3 bg-blue-600 text-white font-semibold rounded-lg shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-gray-800 transition duration-200 w-full sm:w-auto"
+        >
+            Search
+        </button>
+    </form>
+
+    <!-- Loading, Error, and Results Display -->
+    <div id="status-message" class="w-full max-w-4xl text-center text-gray-400 text-lg mt-8">
+        Enter a search term above to find videos.
+    </div>
+
+    <div id="videos-container" class="w-full max-w-4xl grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+        <!-- Video cards will be injected here by JavaScript -->
+    </div>
+
+    <!-- Video Overlay (Modal) -->
+    <div id="video-overlay" class="video-overlay hidden">
+        <div id="video-overlay-content" class="video-overlay-content">
+            <button id="close-overlay-button" class="close-button" aria-label="Close video player">
+                &times;
+            </button>
+            <div class="video-player-container">
+                <iframe
+                    id="dailymotion-iframe"
+                    title="Dailymotion Video Player"
+                    class="absolute top-0 left-0 w-full h-full rounded-b-xl"
+                    allow="autoplay; fullscreen; picture-in-picture"
+                    allowFullScreen
+                ></iframe>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get references to DOM elements
+        const searchForm = document.getElementById('search-form');
+        const searchInput = document.getElementById('search-input');
+        const searchButton = document.getElementById('search-button');
+        const statusMessage = document.getElementById('status-message');
+        const videosContainer = document.getElementById('videos-container');
+        const videoOverlay = document.getElementById('video-overlay');
+        const dailymotionIframe = document.getElementById('dailymotion-iframe');
+        const closeOverlayButton = document.getElementById('close-overlay-button');
+        const videoOverlayContent = document.getElementById('video-overlay-content');
+
+        let hasSearched = false; // Flag to track if a search has been performed
+
+        // Function to fetch videos from the Dailymotion API
+        async function fetchVideos(query) {
+            searchButton.textContent = 'Searching...';
+            searchButton.disabled = true; // Disable button during search
+            statusMessage.textContent = 'Loading videos...';
+            statusMessage.classList.remove('text-red-600', 'bg-red-600', 'p-4', 'rounded-lg', 'shadow-md'); // Clear error styling
+            statusMessage.classList.add('text-blue-400', 'text-xl'); // Set loading styling
+            videosContainer.innerHTML = ''; // Clear previous videos
+            hasSearched = true; // Indicate that a search has been initiated
+
+            const apiUrl = `https://api.dailymotion.com/videos?limit=25&longer_than=40&search=${encodeURIComponent(query)}`;
+
+            try {
+                const response = await fetch(apiUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+
+                if (data && Array.isArray(data.list)) {
+                    displayVideos(data.list);
+                    if (data.list.length === 0) {
+                        statusMessage.textContent = 'No videos found for your search. Try a different query!';
+                        statusMessage.classList.remove('text-blue-400', 'text-xl');
+                        statusMessage.classList.add('text-gray-400', 'text-lg');
+                    } else {
+                        statusMessage.textContent = ''; // Clear status message if videos are found
+                        statusMessage.classList.remove('text-blue-400', 'text-xl', 'text-gray-400', 'text-lg');
+                    }
+                } else {
+                    statusMessage.textContent = 'No video list found in the response.';
+                    statusMessage.classList.remove('text-blue-400', 'text-xl');
+                    statusMessage.classList.add('bg-red-600', 'text-white', 'p-4', 'rounded-lg', 'shadow-md');
+                }
+            } catch (e) {
+                console.error("Failed to fetch videos:", e);
+                statusMessage.textContent = `Error: Failed to fetch videos. Please try again. Error: ${e.message}`;
+                statusMessage.classList.remove('text-blue-400', 'text-xl');
+                statusMessage.classList.add('bg-red-600', 'text-white', 'p-4', 'rounded-lg', 'shadow-md');
+            } finally {
+                searchButton.textContent = 'Search';
+                searchButton.disabled = false; // Re-enable button
+            }
+        }
+
+        // Function to display video cards
+        function displayVideos(videos) {
+            videosContainer.innerHTML = ''; // Clear existing videos
+            videos.forEach(video => {
+                const videoCard = document.createElement('div');
+                videoCard.className = 'block bg-gray-800 rounded-xl shadow-md overflow-hidden transform hover:scale-105 transition duration-300 ease-in-out group cursor-pointer';
+                videoCard.onclick = () => openVideoOverlay(video.id); // Attach click handler
+
+                videoCard.innerHTML = `
+                    <div class="relative w-full h-48 bg-gray-700 flex items-center justify-center overflow-hidden">
+                        <img
+                            src="http://www.dailymotion.com/thumbnail/video/${video.id}"
+                            alt="${video.title || 'Video Thumbnail'}"
+                            class="w-full h-full object-cover group-hover:opacity-75 transition-opacity duration-300"
+                            onerror="this.onerror=null;this.src='https://placehold.co/640x360/1f2937/d1d5db?text=No+Image';"
+                        />
+                        <div class="absolute inset-0 bg-black bg-opacity-40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                            <svg class="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <h3 class="text-lg font-semibold text-blue-300 group-hover:text-blue-200 mb-1">
+                            ${video.title || 'Untitled Video'}
+                        </h3>
+                        <p class="text-sm text-gray-400">
+                            Duration: ${video.duration ? `${Math.floor(video.duration / 60)}m ${video.duration % 60}s` : 'N/A'}
+                        </p>
+                    </div>
+                `;
+                videosContainer.appendChild(videoCard);
+            });
+        }
+
+        // Function to open the video overlay
+        function openVideoOverlay(videoId) {
+            dailymotionIframe.src = `https://www.dailymotion.com/embed/video/${videoId}`;
+            videoOverlay.classList.remove('hidden');
+        }
+
+        // Function to close the video overlay
+        function closeVideoOverlay() {
+            dailymotionIframe.src = ''; // Stop video playback
+            videoOverlay.classList.add('hidden');
+        }
+
+        // Event Listeners
+        searchForm.addEventListener('submit', (event) => {
+            event.preventDefault(); // Prevent default form submission
+            const query = searchInput.value.trim();
+            if (query) {
+                fetchVideos(query);
+            } else {
+                statusMessage.textContent = 'Please enter a search term.';
+                statusMessage.classList.remove('text-blue-400', 'text-xl');
+                statusMessage.classList.add('bg-red-600', 'text-white', 'p-4', 'rounded-lg', 'shadow-md');
+                videosContainer.innerHTML = ''; // Clear videos if search term is empty
+                hasSearched = false; // Reset hasSearched
+            }
+        });
+
+        closeOverlayButton.addEventListener('click', closeVideoOverlay);
+
+        // Close overlay when clicking outside the video content
+        videoOverlay.addEventListener('click', (event) => {
+            // Check if the click target is the overlay itself, not its children
+            if (event.target === videoOverlay) {
+                closeVideoOverlay();
+            }
+        });
+
+        // Prevent closing when clicking inside the modal content
+        videoOverlayContent.addEventListener('click', (event) => {
+            event.stopPropagation();
+        });
+    </script>
+
+</body>
+</html>
